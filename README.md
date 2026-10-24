@@ -55,20 +55,6 @@ A proposta é permitir a localização dos integrantes de um grupo utilizando co
 
 ---
 
-## 🚀 Executando o projeto
-
-```bash
-git clone https://github.com/JulioC3sarDev/GOFIND.git
-
-cd GOFIND
-
-flutter pub get
-
-flutter run
-```
-
----
-
 ## 🎓 Projeto acadêmico
 
 Desenvolvido como projeto da disciplina de **Desenvolvimento Mobile**, explorando conceitos como:
