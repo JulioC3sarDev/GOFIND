@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/perfil_usuario.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../permissions/permissions_screen.dart';
 
@@ -20,6 +21,15 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final _picker = ImagePicker();
   XFile? _foto; // null = ainda sem foto escolhida
+
+  // Liga o campo "Nome" ao código, para ler o que foi digitado
+  final _nomeController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nomeController.dispose();
+    super.dispose();
+  }
 
   Future<void> _escolherFoto(ImageSource origem) async {
     final imagem = await _picker.pickImage(
@@ -80,6 +90,25 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  void _criarConta() {
+    final nome = _nomeController.text.trim();
+
+    if (nome.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Digite seu nome para continuar')),
+      );
+      return;
+    }
+
+    // Guarda o nome para a Home mostrar "Olá, nome"
+    PerfilUsuario.nome = nome;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PermissionsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,7 +152,12 @@ class _SignupScreenState extends State<SignupScreen> {
 
               const SizedBox(height: 22),
 
-              const AppTextField(hint: 'Nome', icon: Icons.person_outline),
+              // Sem "const": este campo usa o controller, que é uma variável
+              AppTextField(
+                hint: 'Nome',
+                icon: Icons.person_outline,
+                controller: _nomeController,
+              ),
               const SizedBox(height: 13),
               const AppTextField(
                 hint: 'E-mail',
@@ -149,12 +183,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 width: double.infinity,
                 height: 51,
                 child: FilledButton(
-                  onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const PermissionsScreen()),
-                      );
-                    },
+                  onPressed: _criarConta,
                   style: FilledButton.styleFrom(
                     backgroundColor: _blue,
                     shape: RoundedRectangleBorder(

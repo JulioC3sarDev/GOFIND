@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/grupos_usuario.dart';
+import '../../core/perfil_usuario.dart';
+import '../groups/create_group_screen.dart';
+import '../groups/join_group_screen.dart';
+import '../groups/group_screen.dart';
 
 // Cores usadas em toda esta tela
 const _blue = Color(0xFF0066FF);
@@ -99,95 +104,92 @@ class _EmBreve extends StatelessWidget {
 // ---------------------------------------------------------------
 // Aba Início (a tela do Figma)
 // ---------------------------------------------------------------
-class _Grupo {
-  final String nome;
-  final String imagem;
-  const _Grupo(this.nome, this.imagem);
-}
-
-class _InicioTab extends StatelessWidget {
+class _InicioTab extends StatefulWidget {
   const _InicioTab();
 
-  // Nome fixo por enquanto; depois virá do perfil do usuário
-  static const _nomeUsuario = 'Peter';
+  @override
+  State<_InicioTab> createState() => _InicioTabState();
+}
 
-  // Para testar o estado vazio, troque por: static const _grupos = <_Grupo>[];
-  static const _grupos = [
-    _Grupo('Show de Los Hermanos', 'assets/images/group_1.png'),
-    _Grupo('Jogo do Sport', 'assets/images/group_2.png'),
-    _Grupo('Rolê no Antigo', 'assets/images/group_3.png'),
-    _Grupo('Cineminha', 'assets/images/group_4.png'),
-  ];
-
+class _InicioTabState extends State<_InicioTab> {
   @override
   Widget build(BuildContext context) {
+    // Nome digitado no cadastro (se entrou pelo login, ainda não temos o nome)
+    final nome = PerfilUsuario.nome.isEmpty ? 'amigo' : PerfilUsuario.nome;
+
+    // Grupos do usuário: vazia na primeira vez que o app é aberto
+    final grupos = GruposUsuario.lista;
+
     return Stack(
       children: [
         // Fundo azul do topo (fica atrás de tudo)
         Container(height: 202, color: _blue),
 
-        // Conteúdo rolável por cima
-        SingleChildScrollView(
-          child: Column(
-            children: [
-              // Cabeçalho: saudação + avatar
-              Padding(
-                padding: const EdgeInsets.fromLTRB(26, 78, 31, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Olá, $_nomeUsuario',
-                            style: GoogleFonts.comfortaa(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
+        // Parte fixa + lista rolável
+        Column(
+          children: [
+            // Cabeçalho: saudação + avatar (fixo)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(26, 78, 31, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Olá, $nome',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.comfortaa(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
-                          Text(
-                            'Vamos encontrar seus amigos?',
-                            style: GoogleFonts.comfortaa(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w300,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: 55,
-                      height: 55,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        image: const DecorationImage(
-                          image: AssetImage(
-                              'assets/images/avatar_placeholder.png'),
-                          fit: BoxFit.cover,
                         ),
+                        Text(
+                          'Vamos encontrar seus amigos?',
+                          style: GoogleFonts.comfortaa(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w300,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 55,
+                    height: 55,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/placeholder.png'),
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
 
-              const SizedBox(height: 39),
+            const SizedBox(height: 39),
 
-              // Painel branco com cantos de cima arredondados
-              Container(
+            // Painel branco: ocupa todo o espaço que sobra até a barra de baixo
+            Expanded(
+              child: Container(
+                width: double.infinity,
                 margin: const EdgeInsets.symmetric(horizontal: 15),
-                padding: const EdgeInsets.fromLTRB(14, 9, 14, 24),
+                padding: const EdgeInsets.fromLTRB(14, 9, 14, 0),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: Column(
                   children: [
-                    // Os dois cartões de ação
+                    // Os dois cartões de ação (fixos)
                     Row(
                       children: [
                         Expanded(
@@ -206,7 +208,14 @@ class _InicioTab extends StatelessWidget {
                             titulo: 'Criar Grupo',
                             texto:
                                 'Monte seu grupo e comece a compartilhar sua localização.',
-                            onTap: () => debugPrint('Criar Grupo'),
+                            onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
+                                );
+                                // Ao voltar, redesenha a Home para mostrar o grupo novo
+                                if (mounted) setState(() {});
+                              },
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -218,7 +227,14 @@ class _InicioTab extends StatelessWidget {
                             titulo: 'Entrar em Grupo',
                             texto:
                                 'Já tem um código? Entre no grupo e seja encontrado',
-                            onTap: () => debugPrint('Entrar em Grupo'),
+                            onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const JoinGroupScreen()),
+                                      );
+                                      // Ao voltar, redesenha a Home (caso um grupo tenha sido criado no caminho)
+                                      if (mounted) setState(() {});
+                                    },
                           ),
                         ),
                       ],
@@ -226,9 +242,11 @@ class _InicioTab extends StatelessWidget {
 
                     const SizedBox(height: 18),
 
-                    // Lista de grupos ou, se não houver nenhum, o estado vazio
-                    if (_grupos.isEmpty)
-                      const _EstadoVazio()
+                    // Sem grupos: estado vazio. Com grupos: título fixo + lista rolável
+                    if (grupos.isEmpty)
+                      const Expanded(
+                        child: SingleChildScrollView(child: _EstadoVazio()),
+                      )
                     else ...[
                       Align(
                         alignment: Alignment.centerLeft,
@@ -244,14 +262,30 @@ class _InicioTab extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 15),
-                      for (final g in _grupos) _GrupoTile(g),
+                      const SizedBox(height: 11),
+
+                      // Só esta parte rola
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(2, 4, 2, 16),
+                          children: [
+                            for (final g in grupos)
+                                _GrupoTile(
+                                  g,
+                                  onVoltar: () {
+                                    // Redesenha a Home ao voltar (o grupo pode ter sido encerrado)
+                                    if (mounted) setState(() {});
+                                  },
+                                ),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -326,8 +360,9 @@ class _CardAcao extends StatelessWidget {
 
 // Linha da lista "Grupos recentes": miniatura + nome
 class _GrupoTile extends StatelessWidget {
-  final _Grupo grupo;
-  const _GrupoTile(this.grupo);
+  final Grupo grupo;
+  final VoidCallback onVoltar;
+  const _GrupoTile(this.grupo, {required this.onVoltar});
 
   @override
   Widget build(BuildContext context) {
@@ -340,7 +375,13 @@ class _GrupoTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => debugPrint('Abrir grupo: ${grupo.nome}'),
+          onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => GroupScreen(grupo: grupo)),
+              );
+              onVoltar();
+            },
           child: Container(
             height: 85,
             padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
@@ -351,21 +392,21 @@ class _GrupoTile extends StatelessWidget {
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.asset(
-                    grupo.imagem,
-                    width: 72,
-                    height: 70,
-                    fit: BoxFit.cover,
-                    // Se a imagem não existir, mostra um ícone
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 72,
-                      height: 70,
-                      color: const Color(0xFFE8F0FF),
-                      child: const Icon(Icons.groups, color: _blue),
-                    ),
-                  ),
-                ),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image(
+                            image: grupo.foto,
+                            width: 72,
+                            height: 70,
+                            fit: BoxFit.cover,
+                            // Se a imagem não existir, mostra um ícone
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 72,
+                              height: 70,
+                              color: const Color(0xFFE8F0FF),
+                              child: const Icon(Icons.groups, color: _blue),
+                            ),
+                          ),
+                        ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
