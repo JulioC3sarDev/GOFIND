@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/grupos_usuario.dart';
+import 'group_screen.dart';
 
 const _blue = Color(0xFF0066FF);
 const _blueSoft = Color(0xFF2F7BFF);
@@ -13,26 +14,45 @@ const _borda = Color(0xFFE3ECFF);
 const _navy = Color(0xFF2B3A67);
 const _hint = Color(0xFF9E9E9E);
 
+// Serve para DUAS telas:
+// - sem "grupo": Criar grupo
+// - com "grupo": Configurar grupo (edita o grupo recebido)
 class CreateGroupScreen extends StatefulWidget {
-  const CreateGroupScreen({super.key});
+  final Grupo? grupo; // EDIÇÃO
+  const CreateGroupScreen({super.key, this.grupo});
 
   @override
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
 }
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
-  final _nome = TextEditingController();
-  final _descricao = TextEditingController();
-  final _evento = TextEditingController();
-  final _local = TextEditingController();
+  late final TextEditingController _nome;
+  late final TextEditingController _descricao;
+  late final TextEditingController _evento;
+  late final TextEditingController _local;
   final _picker = ImagePicker();
 
-  XFile? _foto;
+  String? _caminhoFoto; // EDIÇÃO: guarda só o caminho da foto
   DateTime? _data;
   TimeOfDay? _hora;
+  String _codigo = '';
 
-  // Código sorteado uma vez, quando a tela abre
-  late final String _codigo = _gerarCodigo();
+  bool get _editando => widget.grupo != null; // EDIÇÃO
+
+  @override
+  void initState() {
+    super.initState();
+    // Se estamos editando, começa com os dados do grupo
+    final g = widget.grupo;
+    _nome = TextEditingController(text: g?.nome ?? '');
+    _descricao = TextEditingController(text: g?.descricao ?? '');
+    _evento = TextEditingController(text: g?.eventoNome ?? '');
+    _local = TextEditingController(text: g?.local ?? '');
+    _codigo = g?.codigo ?? _gerarCodigo();
+    _caminhoFoto = g?.caminhoFoto;
+    _data = g?.data;
+    _hora = g == null ? null : _lerHora(g.hora);
+  }
 
   @override
   void dispose() {
@@ -41,6 +61,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     _evento.dispose();
     _local.dispose();
     super.dispose();
+  }
+
+  // Transforma "19:00" em TimeOfDay (ou null se estiver vazio)
+  static TimeOfDay? _lerHora(String texto) {
+    final partes = texto.split(':');
+    if (partes.length != 2) return null;
+    final h = int.tryParse(partes[0]);
+    final m = int.tryParse(partes[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
   }
 
   // 7 caracteres, sem letras e números parecidos (0/O, 1/I)
@@ -63,12 +93,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       _hora == null ? null : '${_dois(_hora!.hour)}:${_dois(_hora!.minute)}';
 
   Future<void> _escolherData() async {
-    final hoje = DateTime.now();
+    final agora = DateTime.now();
+    final hoje = DateTime(agora.year, agora.month, agora.day);
+    final atual = _data;
+
+    // Ao editar, a data salva pode já ter passado: o calendário precisa aceitá-la
+    final primeira = (atual != null && atual.isBefore(hoje)) ? atual : hoje;
+    var ultima = DateTime(hoje.year + 2);
+    if (atual != null && atual.isAfter(ultima)) ultima = atual;
+
     final escolhida = await showDatePicker(
       context: context,
-      initialDate: _data ?? hoje,
-      firstDate: DateTime(hoje.year, hoje.month, hoje.day),
-      lastDate: DateTime(hoje.year + 2),
+      initialDate: atual ?? hoje,
+      firstDate: primeira,
+      lastDate: ultima,
     );
     if (escolhida != null) setState(() => _data = escolhida);
   }
@@ -87,7 +125,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       maxWidth: 800,
       imageQuality: 85,
     );
-    if (imagem != null) setState(() => _foto = imagem);
+    if (imagem != null) setState(() => _caminhoFoto = imagem.path);
   }
 
   void _mostrarOpcoesFoto() {
@@ -126,35 +164,76 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     );
   }
 
-  void _criar() {
-    final nome = _nome.text.trim();
+  // EDIÇÃO: sorteia um código novo (só vale depois de salvar)
+  void _gerarOutroCodigo() {
+    setState(() => _codigo = _gerarCodigo());
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('Novo código gerado. Toque em Salvar para aplicar.')),
+      );
+  }
 
-    if (nome.isEmpty) {
+  // Botão principal: valida o nome e decide entre criar e salvar
+  void _confirmar() {
+    if (_nome.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dê um nome ao grupo para continuar')),
       );
       return;
     }
+    if (_editando) {
+      _salvar();
+    } else {
+      _criar();
+    }
+  }
 
-    // Novo grupo vai para o topo da lista
-       // Novo grupo vai para o topo da lista.
-    // Quem cria é o administrador e, no começo, o único membro.
-    GruposUsuario.lista.insert(
-      0,
-      Grupo(
-        nome: nome,
-        codigo: _codigo,
-        descricao: _descricao.text.trim(),
-        eventoNome: _evento.text.trim(),
-        data: _data,
-        hora: _horaTexto ?? '',
-        local: _local.text.trim(),
-        caminhoFoto: _foto?.path,
-        membros: const [
-          Membro(nome: 'Você', ehVoce: true, admin: true, online: true),
-        ],
-      ),
+  void _criar() {
+    // Quem cria é o administrador e, no começo, o único membro
+    final novo = Grupo(
+      nome: _nome.text.trim(),
+      codigo: _codigo,
+      descricao: _descricao.text.trim(),
+      eventoNome: _evento.text.trim(),
+      data: _data,
+      hora: _horaTexto ?? '',
+      local: _local.text.trim(),
+      caminhoFoto: _caminhoFoto,
+      membros: const [
+        Membro(nome: 'Você', ehVoce: true, admin: true, online: true),
+      ],
     );
+
+    GruposUsuario.adicionar(novo);
+
+    // Vai direto para a tela do grupo. Remove as telas do caminho
+    // (criar grupo e, se veio dela, entrar em grupo): voltar leva à Home.
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => GroupScreen(grupo: novo)),
+      (route) => route.isFirst,
+    );
+  }
+
+  // EDIÇÃO: grava as mudanças no grupo existente e volta
+  void _salvar() {
+    final g = widget.grupo!;
+    g.nome = _nome.text.trim();
+    g.descricao = _descricao.text.trim();
+    g.eventoNome = _evento.text.trim();
+    g.data = _data;
+    g.hora = _horaTexto ?? '';
+    g.local = _local.text.trim();
+    g.caminhoFoto = _caminhoFoto;
+    g.codigo = _codigo;
+
+    // Avisa a tela do grupo e a Home para se redesenharem
+    GruposUsuario.avisar();
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Alterações salvas')));
 
     Navigator.pop(context);
   }
@@ -200,9 +279,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   // Miniatura da foto do grupo, com o selo da câmera
   Widget _miniatura() {
     final ImageProvider imagem;
-    final foto = _foto;
-    if (foto != null) {
-      imagem = kIsWeb ? NetworkImage(foto.path) : FileImage(File(foto.path));
+    final caminho = _caminhoFoto;
+    if (caminho != null) {
+      imagem = kIsWeb ? NetworkImage(caminho) : FileImage(File(caminho));
     } else {
       imagem = const AssetImage('assets/images/group_placeholder.png');
     }
@@ -289,9 +368,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 21),
                   Text(
-                    'Criar grupo',
+                    _editando ? 'Configurar grupo' : 'Criar grupo', // EDIÇÃO
                     style: GoogleFonts.comfortaa(
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
@@ -302,7 +381,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   Padding(
                     padding: const EdgeInsets.only(right: 40),
                     child: Text(
-                      'Monte seu grupo e comece a compartilhar sua localização em tempo real',
+                      _editando // EDIÇÃO
+                          ? 'Ajuste as informações do seu grupo'
+                          : 'Monte seu grupo e comece a compartilhar sua localização em tempo real',
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         color: Colors.white,
@@ -423,7 +504,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Código de acesso',
+                                _editando // EDIÇÃO
+                                    ? 'Gerar outro código'
+                                    : 'Código de acesso',
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -441,6 +524,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
+
+                        // EDIÇÃO: botão de sortear outro código vem antes do código
+                        if (_editando)
+                          IconButton(
+                            onPressed: _gerarOutroCodigo,
+                            tooltip: 'Gerar outro código',
+                            icon: const Icon(Icons.sync, color: _blue),
+                          ),
+
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 12),
@@ -458,11 +550,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          onPressed: _copiarCodigo,
-                          tooltip: 'Copiar código',
-                          icon: const Icon(Icons.copy_outlined, color: _blue),
-                        ),
+
+                        // Criar: botão de copiar vem depois do código
+                        if (!_editando)
+                          IconButton(
+                            onPressed: _copiarCodigo,
+                            tooltip: 'Copiar código',
+                            icon: const Icon(Icons.copy_outlined,
+                                color: _blue),
+                          ),
                       ],
                     ),
                   ),
@@ -508,11 +604,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Botão criar
+                  // Botão principal: Criar grupo ou Salvar
                   SizedBox(
                     height: 51,
                     child: FilledButton(
-                      onPressed: _criar,
+                      onPressed: _confirmar,
                       style: FilledButton.styleFrom(
                         backgroundColor: _blue,
                         shape: RoundedRectangleBorder(
@@ -520,7 +616,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         ),
                       ),
                       child: Text(
-                        'Criar grupo',
+                        _editando ? 'Salvar' : 'Criar grupo', // EDIÇÃO
                         style: GoogleFonts.comfortaa(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,

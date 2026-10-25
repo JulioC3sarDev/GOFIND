@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/grupos_usuario.dart';
 import 'create_group_screen.dart';
 
 const _blue = Color(0xFF0066FF);
@@ -61,20 +60,11 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     );
   }
 
-  Future<void> _criarGrupo() async {
-    final antes = GruposUsuario.lista.length;
-
-    await Navigator.push(
+    void _criarGrupo() {
+    Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
     );
-
-    if (!mounted) return;
-
-    // Se um grupo foi criado, fecha esta tela e volta para a Home
-    if (GruposUsuario.lista.length > antes) {
-      Navigator.pop(context);
-    }
   }
 
   @override

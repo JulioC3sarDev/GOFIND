@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/grupos_usuario.dart';
+import 'dart:math';
+import 'create_group_screen.dart';
 
 const _blue = Color(0xFF0066FF);
 const _borda = Color(0xFFE3ECFF);
@@ -71,13 +73,21 @@ class GroupScreen extends StatelessWidget {
     );
 
     if (confirmou == true && context.mounted) {
-      GruposUsuario.lista.remove(grupo);
+      GruposUsuario.remover(grupo);
       Navigator.pop(context);
     }
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
+    // Redesenha quando o grupo for editado na tela Configurar
+    return ValueListenableBuilder<int>(
+      valueListenable: GruposUsuario.versao,
+      builder: (context, _, __) => _conteudo(context),
+    );
+  }
+
+  Widget _conteudo(BuildContext context) {
     final topo = MediaQuery.of(context).padding.top;
     final n = grupo.membros.length;
 
@@ -253,7 +263,16 @@ class GroupScreen extends StatelessWidget {
                         child: _BotaoAcao(
                           icone: Icons.settings,
                           texto: 'Configurar',
-                          onTap: () => _emBreve(context, 'Configurar'),
+                          onTap: () {
+                            if (!grupo.voceEhAdmin) {
+                              _aviso(context, 'Só o administrador pode configurar o grupo.');
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => CreateGroupScreen(grupo: grupo)),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -390,42 +409,57 @@ class _InfoLinha extends StatelessWidget {
 
 // Caixa azul do radar com o botão "Localizar Amigos"
 // Quando não está ativa (grupo sem outros membros), fica apagada
-class _LocalizarCard extends StatelessWidget {
+// Caixa azul do radar com o botão "Localizar Amigos"
+// Quando não está ativa (grupo sem outros membros), fica apagada
+class _LocalizarCard extends StatefulWidget {
   final bool ativo;
   final VoidCallback onTap;
 
   const _LocalizarCard({required this.ativo, required this.onTap});
 
-  Widget _anel(double d, Color cor) => Container(
-        width: d,
-        height: d,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: cor),
-      );
+  @override
+  State<_LocalizarCard> createState() => _LocalizarCardState();
+}
+
+class _LocalizarCardState extends State<_LocalizarCard>
+    with SingleTickerProviderStateMixin {
+  // Relógio que vai de 0 a 1 e recomeça: uma volta completa do radar
+  late final AnimationController _volta = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _volta.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: ativo ? 1 : 0.5,
+      opacity: widget.ativo ? 1 : 0.5,
       child: Material(
         color: _blue,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
+          onTap: widget.onTap,
           child: SizedBox(
             height: 182,
             child: Column(
               children: [
-                const SizedBox(height: 18),
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    _anel(112, const Color(0xFF7FAEFF)),
-                    _anel(88, const Color(0xFFB5D0FF)),
-                    _anel(63, const Color(0xFFDDE9FF)),
-                    _anel(43, Colors.white),
-                  ],
+                const SizedBox(height: 16),
+
+                // O radar animado
+                RepaintBoundary(
+                  child: SizedBox(
+                    width: 116,
+                    height: 116,
+                    child: CustomPaint(painter: _RadarPainter(_volta)),
+                  ),
                 ),
+
                 const Spacer(),
                 Container(
                   height: 32,
@@ -639,4 +673,93 @@ class _MembroItem extends StatelessWidget {
       ),
     );
   }
+}
+
+// Desenha o radar de sonar. É redesenhado a cada quadro da animação.
+class _RadarPainter extends CustomPainter {
+  final Animation<double> animacao;
+
+  _RadarPainter(this.animacao) : super(repaint: animacao);
+
+  // Tamanho do rastro da varredura, em radianos (cerca de 75 graus)
+  static const _rastro = 1.3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centro = size.center(Offset.zero);
+    final raio = size.shortestSide / 2;
+    final t = animacao.value; // 0 a 1, uma volta
+    final angulo = t * 2 * pi; // para onde a linha aponta agora
+
+    final disco = Rect.fromCircle(center: centro, radius: raio);
+
+    // Fundo do disco, um azul um pouco mais escuro que a caixa
+    canvas.drawCircle(centro, raio, Paint()..color = const Color(0xFF0050D6));
+
+    // Tudo abaixo fica recortado dentro do disco
+    canvas.save();
+    canvas.clipPath(Path()..addOval(disco));
+
+    // Cruz e anéis de distância
+    final linha = Paint()
+      ..color = Colors.white.withValues(alpha: 0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    canvas.drawLine(Offset(centro.dx - raio, centro.dy),
+        Offset(centro.dx + raio, centro.dy), linha);
+    canvas.drawLine(Offset(centro.dx, centro.dy - raio),
+        Offset(centro.dx, centro.dy + raio), linha);
+    canvas.drawCircle(centro, raio / 3, linha);
+    canvas.drawCircle(centro, raio * 2 / 3, linha);
+
+    // Pulso (ping): um anel que nasce no centro e se apaga ao chegar na borda
+    canvas.drawCircle(
+      centro,
+      raio * t,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.35 * (1 - t))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Rastro da varredura: uma "fatia" que vai de transparente a branco
+    final rastro = Paint()
+      ..shader = SweepGradient(
+        startAngle: 0,
+        endAngle: _rastro,
+        colors: [
+          Colors.white.withValues(alpha: 0),
+          Colors.white.withValues(alpha: 0.6),
+        ],
+        transform: GradientRotation(angulo - _rastro),
+      ).createShader(disco);
+    canvas.drawArc(disco, angulo - _rastro, _rastro, true, rastro);
+
+    // Linha brilhante na frente da varredura
+    canvas.drawLine(
+      centro,
+      Offset(centro.dx + raio * cos(angulo), centro.dy + raio * sin(angulo)),
+      Paint()
+        ..color = Colors.white
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+
+    canvas.restore();
+
+    // Borda do disco e ponto central (você)
+    canvas.drawCircle(
+      centro,
+      raio - 0.75,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(centro, 4, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter antigo) => antigo.animacao != animacao;
 }

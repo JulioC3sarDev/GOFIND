@@ -28,20 +28,21 @@ class Membro {
   }
 }
 
-// Modelo de um grupo
+// Modelo de um grupo. Os campos editáveis não são "final":
+// a tela Configurar grupo altera esses valores.
 class Grupo {
-  final String nome;
-  final String codigo;
-  final String descricao;
-  final String eventoNome;
-  final DateTime? data;
-  final String hora; // "19:00" ou vazio
-  final String local;
-  final String? caminhoFoto; // foto escolhida pelo usuário (ou null)
+  String nome;
+  String codigo;
+  String descricao;
+  String eventoNome;
+  DateTime? data;
+  String hora; // "19:00" ou vazio
+  String local;
+  String? caminhoFoto; // foto escolhida pelo usuário (ou null)
   final String imagem; // imagem padrão, usada quando não há foto
   final List<Membro> membros;
 
-  const Grupo({
+  Grupo({
     required this.nome,
     this.codigo = '',
     this.descricao = '',
@@ -90,4 +91,20 @@ class Grupo {
 class GruposUsuario {
   // Começa vazia: é o que o usuário vê na primeira vez que abre o app
   static final List<Grupo> lista = [];
+
+  // Sobe a cada mudança. As telas escutam isto para se redesenhar.
+  static final ValueNotifier<int> versao = ValueNotifier<int>(0);
+
+  // Avisa as telas que algum grupo mudou (por exemplo, depois de editar)
+  static void avisar() => versao.value++;
+
+  static void adicionar(Grupo grupo) {
+    lista.insert(0, grupo);
+    avisar();
+  }
+
+  static void remover(Grupo grupo) {
+    lista.remove(grupo);
+    avisar();
+  }
 }

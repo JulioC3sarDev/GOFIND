@@ -4,8 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/grupos_usuario.dart';
 import '../../core/perfil_usuario.dart';
 import '../groups/create_group_screen.dart';
-import '../groups/join_group_screen.dart';
 import '../groups/group_screen.dart';
+import '../groups/join_group_screen.dart';
+import '../groups/groups_list_screen.dart';
 
 // Cores usadas em toda esta tela
 const _blue = Color(0xFF0066FF);
@@ -14,7 +15,7 @@ const _borda = Color(0xFFE3ECFF);
 const _gray = Color(0xFF9E9E9E);
 
 // ---------------------------------------------------------------
-// Tela principal: guarda qual aba está ativa e mostra a barra de baixo
+// Tela principal: barra de baixo + um navegador para cada aba
 // ---------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,58 +27,117 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _aba = 0; // 0 = Início, 1 = Grupos, 2 = Radar, 3 = Perfil
 
+  // Uma "chave" por aba, para conseguirmos comandar o navegador de cada uma
+  final _navKeys = List.generate(4, (_) => GlobalKey<NavigatorState>());
+
+  void _aoTocarAba(int i) {
+    if (i == _aba) {
+      // Tocar na aba em que você já está volta para a tela inicial dela
+      _navKeys[i].currentState?.popUntil((rota) => rota.isFirst);
+    } else {
+      setState(() => _aba = i);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final paginas = <Widget>[
-      const _InicioTab(),
-      const _EmBreve('Grupos'),
-      const _EmBreve('Radar'),
-      const _EmBreve('Perfil'),
-    ];
+    // Com o teclado aberto, esconde a barra para sobrar mais espaço
+    final tecladoAberto = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Ícones da barra de status claros sobre o azul da aba Início
-      value: _aba == 0
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: paginas[_aba],
-        bottomNavigationBar: Container(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0xFFE5E5E5))),
-          ),
-          child: BottomNavigationBar(
-            currentIndex: _aba,
-            onTap: (i) => setState(() => _aba = i),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            elevation: 0,
-            selectedItemColor: _blue,
-            unselectedItemColor: _gray,
-            selectedLabelStyle: GoogleFonts.comfortaa(fontSize: 12),
-            unselectedLabelStyle: GoogleFonts.comfortaa(fontSize: 12),
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded),
-                label: 'Início',
+    return PopScope(
+      canPop: false,
+      // Botão voltar do Android: volta dentro da aba, depois para o Início,
+      // e só então fecha o app
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final nav = _navKeys[_aba].currentState;
+        if (nav != null && nav.canPop()) {
+          nav.pop();
+        } else if (_aba != 0) {
+          setState(() => _aba = 0);
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        // Ícones da barra de status claros sobre o azul da aba Início
+            value: (_aba == 0 || _aba == 1)
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: IndexedStack(
+            index: _aba,
+            children: [
+              _TabNavigator(navKey: _navKeys[0], raiz: const _InicioTab()),
+                            _TabNavigator(
+                navKey: _navKeys[1],
+                raiz: GroupsListScreen(
+                  // A seta de voltar leva para a aba Início
+                  onVoltar: () => setState(() => _aba = 0),
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.group),
-                label: 'Grupos',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.location_on),
-                label: 'Radar',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.settings_outlined),
-                label: 'Perfil',
-              ),
+              _TabNavigator(
+                  navKey: _navKeys[2], raiz: const _EmBreve('Radar')),
+              _TabNavigator(
+                  navKey: _navKeys[3], raiz: const _EmBreve('Perfil')),
             ],
           ),
+          bottomNavigationBar: tecladoAberto
+              ? null
+              : Container(
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFFE5E5E5))),
+                  ),
+                  child: BottomNavigationBar(
+                    currentIndex: _aba,
+                    onTap: _aoTocarAba,
+                    type: BottomNavigationBarType.fixed,
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    selectedItemColor: _blue,
+                    unselectedItemColor: _gray,
+                    selectedLabelStyle: GoogleFonts.comfortaa(fontSize: 12),
+                    unselectedLabelStyle: GoogleFonts.comfortaa(fontSize: 12),
+                    items: const [
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home_rounded),
+                        label: 'Início',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.group),
+                        label: 'Grupos',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.location_on),
+                        label: 'Radar',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.settings_outlined),
+                        label: 'Perfil',
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
+    );
+  }
+}
+
+// O navegador de uma aba: as telas abertas dentro da aba ficam aqui dentro,
+// e a barra de baixo (que está fora) continua visível
+class _TabNavigator extends StatelessWidget {
+  final GlobalKey<NavigatorState> navKey;
+  final Widget raiz;
+
+  const _TabNavigator({required this.navKey, required this.raiz});
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      key: navKey,
+      onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => raiz),
     );
   }
 }
@@ -104,190 +164,185 @@ class _EmBreve extends StatelessWidget {
 // ---------------------------------------------------------------
 // Aba Início (a tela do Figma)
 // ---------------------------------------------------------------
-class _InicioTab extends StatefulWidget {
+class _InicioTab extends StatelessWidget {
   const _InicioTab();
 
   @override
-  State<_InicioTab> createState() => _InicioTabState();
-}
-
-class _InicioTabState extends State<_InicioTab> {
-  @override
   Widget build(BuildContext context) {
-    // Nome digitado no cadastro (se entrou pelo login, ainda não temos o nome)
-    final nome = PerfilUsuario.nome.isEmpty ? 'amigo' : PerfilUsuario.nome;
+    // Redesenha sozinha sempre que a lista de grupos mudar
+    return ValueListenableBuilder<int>(
+      valueListenable: GruposUsuario.versao,
+      builder: (context, _, __) {
+        // Nome digitado no cadastro (se entrou pelo login, ainda não temos o nome)
+        final nome =
+            PerfilUsuario.nome.isEmpty ? 'amigo' : PerfilUsuario.nome;
 
-    // Grupos do usuário: vazia na primeira vez que o app é aberto
-    final grupos = GruposUsuario.lista;
+        // Grupos do usuário: vazia na primeira vez que o app é aberto
+        final grupos = GruposUsuario.lista;
 
-    return Stack(
-      children: [
-        // Fundo azul do topo (fica atrás de tudo)
-        Container(height: 202, color: _blue),
-
-        // Parte fixa + lista rolável
-        Column(
+        return Stack(
           children: [
-            // Cabeçalho: saudação + avatar (fixo)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(26, 78, 31, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Olá, $nome',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.comfortaa(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'Vamos encontrar seus amigos?',
-                          style: GoogleFonts.comfortaa(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w300,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 55,
-                    height: 55,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/images/placeholder.png'),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Fundo azul do topo (fica atrás de tudo)
+            Container(height: 202, color: _blue),
 
-            const SizedBox(height: 39),
-
-            // Painel branco: ocupa todo o espaço que sobra até a barra de baixo
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 15),
-                padding: const EdgeInsets.fromLTRB(14, 9, 14, 0),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Column(
-                  children: [
-                    // Os dois cartões de ação (fixos)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CardAcao(
-                            destaque: true,
-                            icone: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.add,
-                                  color: _blue, size: 26),
-                            ),
-                            titulo: 'Criar Grupo',
-                            texto:
-                                'Monte seu grupo e comece a compartilhar sua localização.',
-                            onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
-                                );
-                                // Ao voltar, redesenha a Home para mostrar o grupo novo
-                                if (mounted) setState(() {});
-                              },
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: _CardAcao(
-                            destaque: false,
-                            icone: const Icon(Icons.groups,
-                                color: _blue, size: 36),
-                            titulo: 'Entrar em Grupo',
-                            texto:
-                                'Já tem um código? Entre no grupo e seja encontrado',
-                            onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => const JoinGroupScreen()),
-                                      );
-                                      // Ao voltar, redesenha a Home (caso um grupo tenha sido criado no caminho)
-                                      if (mounted) setState(() {});
-                                    },
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // Sem grupos: estado vazio. Com grupos: título fixo + lista rolável
-                    if (grupos.isEmpty)
-                      const Expanded(
-                        child: SingleChildScrollView(child: _EstadoVazio()),
-                      )
-                    else ...[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 2),
-                          child: Text(
-                            'Grupos recentes',
-                            style: GoogleFonts.comfortaa(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: _blue,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 11),
-
-                      // Só esta parte rola
+            // Parte fixa + lista rolável
+            Column(
+              children: [
+                // Cabeçalho: saudação + avatar (fixo)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(26, 78, 31, 0),
+                  child: Row(
+                    children: [
                       Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(2, 4, 2, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (final g in grupos)
-                                _GrupoTile(
-                                  g,
-                                  onVoltar: () {
-                                    // Redesenha a Home ao voltar (o grupo pode ter sido encerrado)
-                                    if (mounted) setState(() {});
-                                  },
-                                ),
+                            Text(
+                              'Olá, $nome',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.comfortaa(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Vamos encontrar seus amigos?',
+                              style: GoogleFonts.comfortaa(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w300,
+                                color: Colors.white,
+                              ),
+                            ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Container(
+                        width: 55,
+                        height: 55,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          image: const DecorationImage(
+                            image:
+                                AssetImage('assets/images/placeholder.png'),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 39),
+
+                // Painel branco: ocupa todo o espaço que sobra até a barra de baixo
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 15),
+                    padding: const EdgeInsets.fromLTRB(14, 9, 14, 0),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    child: Column(
+                      children: [
+                        // Os dois cartões de ação (fixos)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _CardAcao(
+                                destaque: true,
+                                icone: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.add,
+                                      color: _blue, size: 26),
+                                ),
+                                titulo: 'Criar Grupo',
+                                texto:
+                                    'Monte seu grupo e comece a compartilhar sua localização.',
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const CreateGroupScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: _CardAcao(
+                                destaque: false,
+                                icone: const Icon(Icons.groups,
+                                    color: _blue, size: 36),
+                                titulo: 'Entrar em Grupo',
+                                texto:
+                                    'Já tem um código? Entre no grupo e seja encontrado',
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const JoinGroupScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // Sem grupos: estado vazio. Com grupos: título fixo + lista rolável
+                        if (grupos.isEmpty)
+                          const Expanded(
+                            child:
+                                SingleChildScrollView(child: _EstadoVazio()),
+                          )
+                        else ...[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 2),
+                              child: Text(
+                                'Grupos recentes',
+                                style: GoogleFonts.comfortaa(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: _blue,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 11),
+
+                          // Só esta parte rola
+                          Expanded(
+                            child: ListView(
+                              padding:
+                                  const EdgeInsets.fromLTRB(2, 4, 2, 16),
+                              children: [
+                                for (final g in grupos) _GrupoTile(g),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -361,8 +416,7 @@ class _CardAcao extends StatelessWidget {
 // Linha da lista "Grupos recentes": miniatura + nome
 class _GrupoTile extends StatelessWidget {
   final Grupo grupo;
-  final VoidCallback onVoltar;
-  const _GrupoTile(this.grupo, {required this.onVoltar});
+  const _GrupoTile(this.grupo);
 
   @override
   Widget build(BuildContext context) {
@@ -375,13 +429,10 @@ class _GrupoTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => GroupScreen(grupo: grupo)),
-              );
-              onVoltar();
-            },
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => GroupScreen(grupo: grupo)),
+          ),
           child: Container(
             height: 85,
             padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
@@ -392,21 +443,21 @@ class _GrupoTile extends StatelessWidget {
             child: Row(
               children: [
                 ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image(
-                            image: grupo.foto,
-                            width: 72,
-                            height: 70,
-                            fit: BoxFit.cover,
-                            // Se a imagem não existir, mostra um ícone
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 72,
-                              height: 70,
-                              color: const Color(0xFFE8F0FF),
-                              child: const Icon(Icons.groups, color: _blue),
-                            ),
-                          ),
-                        ),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image(
+                    image: grupo.foto,
+                    width: 72,
+                    height: 70,
+                    fit: BoxFit.cover,
+                    // Se a imagem não existir, mostra um ícone
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 72,
+                      height: 70,
+                      color: const Color(0xFFE8F0FF),
+                      child: const Icon(Icons.groups, color: _blue),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
