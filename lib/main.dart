@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
-
-import 'core/theme/app_theme.dart';
 import 'features/onboarding/splash_screen.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-
   runApp(const GoFindApp());
 }
 
@@ -17,11 +13,7 @@ class GoFindApp extends StatelessWidget {
     return MaterialApp(
       title: 'GoFind',
       debugShowCheckedModeBanner: false,
-
-      // Tema global do aplicativo
-      theme: AppTheme.light,
-
-      // Primeira tela do aplicativo
+      // Com perfil criado, abre direto na Home; sem perfil, na boas-vindas
       home: const SplashScreen(),
     );
   }

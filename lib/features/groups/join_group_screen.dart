@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'create_group_screen.dart';
+import '../../core/widgets/avatar_perfil.dart';
 
 const _blue = Color(0xFF0066FF);
 const _blueSoft = Color(0xFF2F7BFF);

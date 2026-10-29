@@ -1,9 +1,15 @@
+import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/grupos_usuario.dart';
-import 'dart:math';
+import '../../core/modo_teste.dart';
+import '../../core/navegacao_app.dart';
+import '../chat/chat_screen.dart';
 import 'create_group_screen.dart';
+import 'marcar_ponto_screen.dart';
+import '../radar/radar_screen.dart';
 
 const _blue = Color(0xFF0066FF);
 const _borda = Color(0xFFE3ECFF);
@@ -24,14 +30,25 @@ class GroupScreen extends StatelessWidget {
       _aviso(context, '$nome: em breve');
 
   void _localizar(BuildContext context) {
-    if (!grupo.temOutrosMembros) {
+    // Sozinho no grupo, não há ninguém para localizar
+    if (!grupo.temOutrosMembros && !amigosDeTeste) {
       _aviso(
         context,
         'Você ainda está sozinho no grupo. Convide amigos para poder localizá-los.',
       );
       return;
     }
-    _emBreve(context, 'Localizar Amigos');
+    
+    // Define o grupo atual no gerenciador e empilha a tela do radar corretamente na rota do grupo
+    NavegacaoApp.grupoDoRadar.value = grupo;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RadarScreen(
+          onVoltar: () => Navigator.pop(context),
+        ),
+      ),
+    );
   }
 
   Future<void> _convidar(BuildContext context) async {
@@ -46,26 +63,47 @@ class GroupScreen extends StatelessWidget {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
         title: Text(
           admin ? 'Encerrar grupo?' : 'Sair do grupo?',
-          style: GoogleFonts.comfortaa(fontWeight: FontWeight.w700),
+          style: GoogleFonts.comfortaa(
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0066FF),
+          ),
         ),
         content: Text(
           admin
-              ? 'O grupo "${grupo.nome}" será apagado e deixará de existir para todos.'
-              : 'Você deixará de compartilhar sua localização com este grupo.',
-          style: GoogleFonts.inter(fontSize: 15),
+              ? 'O grupo "${grupo.nome}" será encerrado para todos e ficará guardado em Inativos.'
+              : 'Você deixa de compartilhar sua localização com "${grupo.nome}". O grupo ficará guardado em Inativos.',
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            color: const Color(0xFF4A5875),
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.comfortaa(
+                fontWeight: FontWeight.w700,
+                color: const Color.fromARGB(255, 9, 9, 9),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               admin ? 'Encerrar' : 'Sair',
-              style: const TextStyle(color: Color(0xFFD32F2F)),
+              style: GoogleFonts.comfortaa(
+                fontWeight: FontWeight.w700,
+                color: admin ? const Color(0xFF0066FF) : const Color(0xFF0066FF),
+              ),
             ),
           ),
         ],
@@ -73,12 +111,13 @@ class GroupScreen extends StatelessWidget {
     );
 
     if (confirmou == true && context.mounted) {
-      GruposUsuario.remover(grupo);
+      // Vai para o histórico (Inativos) em vez de ser apagado
+      GruposUsuario.encerrar(grupo);
       Navigator.pop(context);
     }
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     // Redesenha quando o grupo for editado na tela Configurar
     return ValueListenableBuilder<int>(
@@ -98,83 +137,162 @@ class GroupScreen extends StatelessWidget {
         body: Column(
           children: [
             // ---------------- Cabeçalho azul ----------------
-            Container(
-              width: double.infinity,
-              color: _blue,
-              padding: EdgeInsets.fromLTRB(25, topo + 10, 20, 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Material(
-                    color: Colors.white,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.pop(context),
-                      child: const SizedBox(
-                        width: 42,
-                        height: 42,
-                        child: Center(
-                          child: Icon(Icons.arrow_back_ios_new,
-                              size: 18, color: _blue),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 38),
-                  Row(
-                    children: [
-                      Container(
-                        width: 107,
-                        height: 102,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: grupo.foto,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              grupo.nome,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.comfortaa(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                height: 1.15,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$n ${n == 1 ? 'membro' : 'membros'}',
-                              style: GoogleFonts.comfortaa(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            // ---------------- Cabeçalho ----------------
+ClipRRect(
+  borderRadius: const BorderRadius.only(
+    bottomLeft: Radius.circular(32),
+    bottomRight: Radius.circular(32),
+  ),
+  child: SizedBox(
+    width: double.infinity,
+    child: Stack(
+      children: [
+        // Foto ocupando todo o cabeçalho
+        Positioned.fill(
+          child: Image(
+            image: grupo.foto,
+            fit: BoxFit.cover,
+          ),
+        ),
+
+        // Desfoque
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: 10,
+              sigmaY: 10,
+            ),
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+        ),
+
+        // Camada azul para manter a identidade visual
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  _blue.withOpacity(.25),
+                  _blue.withOpacity(.88),
                 ],
               ),
             ),
+          ),
+        ),
+
+        // Conteúdo
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            25,
+            topo + 10,
+            22,
+            26,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Material(
+                color: Colors.white,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.pop(context),
+                  child: const SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Center(
+                      child: Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 18,
+                        color: _blue,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 34),
+
+              Row(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                      image: DecorationImage(
+                        image: grupo.foto,
+                        fit: BoxFit.cover,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 12,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 18),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          grupo.nome,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.comfortaa(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.15,
+                          ),
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Text(
+                          '$n ${n == 1 ? 'membro' : 'membros'}',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  ),
+),
 
             // ---------------- Conteúdo rolável ----------------
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(17, 15, 17, 28),
                 children: [
+                  _DescricaoCard(
+                    descricao: grupo.descricao,
+                  ),
+                  const SizedBox(height: 18),
                   // Cartão: local, data, horário + Localizar Amigos
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
@@ -219,14 +337,19 @@ class GroupScreen extends StatelessWidget {
                         Expanded(
                           flex: 11,
                           child: _LocalizarCard(
-                            ativo: grupo.temOutrosMembros,
+                            ativo: grupo.temOutrosMembros || amigosDeTeste,
                             onTap: () => _localizar(context),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  
+                 const SizedBox(height: 18),
+
+
+
+const SizedBox(height: 3),
 
                   // Linha de ações
                   Row(
@@ -234,9 +357,17 @@ class GroupScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         flex: 7,
-                        child: _BotaoDestaque(
-                          texto: 'Marcar ponto\nde encontro',
-                          onTap: () => _emBreve(context, 'Marcar ponto de encontro'),
+                          child: _BotaoDestaque(
+                          texto: grupo.ponto == null
+                              ? 'Ponto\nde encontro'
+                              : 'Alterar ponto\nde encontro',
+                          // Abre dentro da aba, então a barra de baixo continua
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MarcarPontoScreen(grupo: grupo),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -245,7 +376,13 @@ class GroupScreen extends StatelessWidget {
                         child: _BotaoAcao(
                           icone: Icons.chat,
                           texto: 'Chat',
-                          onTap: () => _emBreve(context, 'Chat'),
+                          // O chat abre por cima da barra de baixo
+                          onTap: () =>
+                              Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(grupo: grupo),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -265,12 +402,15 @@ class GroupScreen extends StatelessWidget {
                           texto: 'Configurar',
                           onTap: () {
                             if (!grupo.voceEhAdmin) {
-                              _aviso(context, 'Só o administrador pode configurar o grupo.');
+                              _aviso(context,
+                                  'Só o administrador pode configurar o grupo.');
                               return;
                             }
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => CreateGroupScreen(grupo: grupo)),
+                              MaterialPageRoute(
+                                builder: (_) => CreateGroupScreen(grupo: grupo),
+                              ),
                             );
                           },
                         ),
@@ -407,10 +547,8 @@ class _InfoLinha extends StatelessWidget {
   }
 }
 
-// Caixa azul do radar com o botão "Localizar Amigos"
-// Quando não está ativa (grupo sem outros membros), fica apagada
-// Caixa azul do radar com o botão "Localizar Amigos"
-// Quando não está ativa (grupo sem outros membros), fica apagada
+// Caixa azul do radar com o botão "Localizar Amigos".
+// Sem amigos no grupo o botão fica com um cadeado, mas o radar continua vivo.
 class _LocalizarCard extends StatefulWidget {
   final bool ativo;
   final VoidCallback onTap;
@@ -435,63 +573,92 @@ class _LocalizarCardState extends State<_LocalizarCard>
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: widget.ativo ? 1 : 0.5,
-      child: Material(
-        color: _blue,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: widget.onTap,
-          child: SizedBox(
-            height: 182,
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-
-                // O radar animado
-                RepaintBoundary(
-                  child: SizedBox(
-                    width: 116,
-                    height: 116,
-                    child: CustomPaint(painter: _RadarPainter(_volta)),
+ @override
+Widget build(BuildContext context) {
+  return Material(
+    color: _blue,
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: widget.onTap,
+      child: SizedBox(
+        height: 182,
+        child: Stack(
+          children: [
+            // Radar ocupando TODO o card
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _RadarPainter(_volta),
                   ),
                 ),
+              ),
+            ),
 
-                const Spacer(),
-                Container(
-                  height: 32,
-                  margin: const EdgeInsets.symmetric(horizontal: 14),
+            // Botão por cima do radar
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  bottom: 12,
+                ),
+                child: Container(
+                  height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
+                    color: widget.ativo
+                        ? Colors.white.withOpacity(0.96)
+                        : const Color(0xFFEAF2FF).withOpacity(0.96),
+                    borderRadius: BorderRadius.circular(7),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        'Localizar Amigos',
-                        style: GoogleFonts.comfortaa(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: _blue,
-                        ),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!widget.ativo) ...[
+                            const Icon(
+                              Icons.lock_outline,
+                              size: 16,
+                              color: _blue,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            'Localizar Amigos',
+                            style: GoogleFonts.comfortaa(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _blue,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // Botão azul grande: "Marcar ponto de encontro"
@@ -499,7 +666,10 @@ class _BotaoDestaque extends StatelessWidget {
   final String texto;
   final VoidCallback onTap;
 
-  const _BotaoDestaque({required this.texto, required this.onTap});
+  const _BotaoDestaque({
+    required this.texto,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -509,19 +679,31 @@ class _BotaoDestaque extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
-        child: SizedBox(
+        child: Container(
           height: 68,
-          child: Center(
-            child: Text(
-              texto,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.comfortaa(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.groups_rounded,
                 color: Colors.white,
-                height: 1.2,
+                size: 34,
               ),
-            ),
+              const SizedBox(height: 2),
+              Text(
+                texto,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.comfortaa(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1.1,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -687,7 +869,7 @@ class _RadarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final centro = size.center(Offset.zero);
-    final raio = size.shortestSide / 2;
+    final raio = min(size.width, size.height) * 0.69;
     final t = animacao.value; // 0 a 1, uma volta
     final angulo = t * 2 * pi; // para onde a linha aponta agora
 
@@ -762,4 +944,119 @@ class _RadarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RadarPainter antigo) => antigo.animacao != animacao;
+}
+
+class _DescricaoCard extends StatefulWidget {
+  final String descricao;
+
+  const _DescricaoCard({
+    required this.descricao,
+  });
+
+  @override
+  State<_DescricaoCard> createState() => _DescricaoCardState();
+}
+
+class _DescricaoCardState extends State<_DescricaoCard> {
+  bool _expandido = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _borda),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x140066FF),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            setState(() {
+              _expandido = !_expandido;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      color: _blue,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Descrição',
+                        style: GoogleFonts.comfortaa(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: _blue,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _expandido ? .5 : 0,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 28,
+                        color: _blue,
+                      ),
+                    ),
+                  ],
+                ),
+
+                ClipRect(
+                    child: AnimatedAlign(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.bottomLeft,
+                      heightFactor: _expandido ? 1 : 0,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 220),
+                        opacity: _expandido ? 1 : 0,
+                        curve: Curves.easeOut,
+                        child: Padding(
+                            padding: const EdgeInsets.only(
+                              top: 14,
+                              left: 4,
+                              right: 4,
+                            ),
+                            child: Text(
+                            widget.descricao.trim().isEmpty
+                                ? 'Nenhuma descrição foi adicionada.'
+                                : widget.descricao,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              height: 1.55,
+                              color: const Color(0xFF333333),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

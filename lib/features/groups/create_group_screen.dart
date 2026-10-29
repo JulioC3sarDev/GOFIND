@@ -573,8 +573,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           icone: Icons.access_time_filled,
                           texto: 'Informações do evento',
                         ),
-                        const SizedBox(height: 14),
-                        _campoTexto('Nome do Evento', _evento),
+                        
                         const SizedBox(height: 10),
                         Row(
                           children: [

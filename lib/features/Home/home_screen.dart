@@ -5,8 +5,12 @@ import '../../core/grupos_usuario.dart';
 import '../../core/perfil_usuario.dart';
 import '../groups/create_group_screen.dart';
 import '../groups/group_screen.dart';
-import '../groups/join_group_screen.dart';
 import '../groups/groups_list_screen.dart';
+import '../groups/join_group_screen.dart';
+import '../radar/radar_screen.dart';
+import '../../core/navegacao_app.dart';
+import '../profile/profile_screen.dart';
+import '../../core/widgets/avatar_perfil.dart';
 
 // Cores usadas em toda esta tela
 const _blue = Color(0xFF0066FF);
@@ -30,11 +34,48 @@ class _HomeScreenState extends State<HomeScreen> {
   // Uma "chave" por aba, para conseguirmos comandar o navegador de cada uma
   final _navKeys = List.generate(4, (_) => GlobalKey<NavigatorState>());
 
+  // A tela inicial de cada aba. Criadas uma vez só.
+  late final List<Widget> _raizes = [
+    const _InicioTab(),
+    GroupsListScreen(
+      // A seta de voltar leva para a aba Início
+      onVoltar: () => setState(() => _aba = 0),
+    ),
+    RadarScreen(
+      onVoltar: () => setState(() => _aba = 0),
+    ),
+        PerfilScreen(
+      onVoltar: () => setState(() => _aba = 0),
+    ),
+  ];
+
+    @override
+  void initState() {
+    super.initState();
+    NavegacaoApp.pedidoDeAba.addListener(_aoPedirAba);
+  }
+
+  @override
+  void dispose() {
+    NavegacaoApp.pedidoDeAba.removeListener(_aoPedirAba);
+    super.dispose();
+  }
+
+  // Outras telas podem pedir uma troca de aba (ex.: Localizar Amigos abre o Radar)
+  void _aoPedirAba() {
+    final pedido = NavegacaoApp.pedidoDeAba.value;
+    if (pedido == null) return;
+    NavegacaoApp.pedidoDeAba.value = null;
+    if (mounted) setState(() => _aba = pedido);
+  }
+
   void _aoTocarAba(int i) {
     if (i == _aba) {
       // Tocar na aba em que você já está volta para a tela inicial dela
       _navKeys[i].currentState?.popUntil((rota) => rota.isFirst);
     } else {
+      // Ao abrir o Radar pela barra, ele volta a perguntar qual grupo
+      if (i == 2) NavegacaoApp.grupoDoRadar.value = null;
       setState(() => _aba = i);
     }
   }
@@ -60,8 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        // Ícones da barra de status claros sobre o azul da aba Início
-            value: (_aba == 0 || _aba == 1)
+        // Ícones da barra de status claros nas abas com cabeçalho azul
+            value: (_aba == 0 || _aba == 1 || _aba == 3)
             ? SystemUiOverlayStyle.light
             : SystemUiOverlayStyle.dark,
         child: Scaffold(
@@ -69,18 +110,15 @@ class _HomeScreenState extends State<HomeScreen> {
           body: IndexedStack(
             index: _aba,
             children: [
-              _TabNavigator(navKey: _navKeys[0], raiz: const _InicioTab()),
-                            _TabNavigator(
-                navKey: _navKeys[1],
-                raiz: GroupsListScreen(
-                  // A seta de voltar leva para a aba Início
-                  onVoltar: () => setState(() => _aba = 0),
+              for (var i = 0; i < 4; i++)
+                // As animações só rodam na aba que está visível
+                TickerMode(
+                  enabled: _aba == i,
+                  child: _TabNavigator(
+                    navKey: _navKeys[i],
+                    raiz: _raizes[i],
+                  ),
                 ),
-              ),
-              _TabNavigator(
-                  navKey: _navKeys[2], raiz: const _EmBreve('Radar')),
-              _TabNavigator(
-                  navKey: _navKeys[3], raiz: const _EmBreve('Perfil')),
             ],
           ),
           bottomNavigationBar: tecladoAberto
@@ -112,8 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: Icon(Icons.location_on),
                         label: 'Radar',
                       ),
-                      BottomNavigationBarItem(
-                        icon: Icon(Icons.settings_outlined),
+                        BottomNavigationBarItem(
+                        icon: Icon(Icons.person_add_alt_1),
                         label: 'Perfil',
                       ),
                     ],
@@ -219,19 +257,7 @@ class _InicioTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Container(
-                        width: 55,
-                        height: 55,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: const DecorationImage(
-                            image:
-                                AssetImage('assets/images/placeholder.png'),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
+                      const AvatarPerfil(),
                     ],
                   ),
                 ),

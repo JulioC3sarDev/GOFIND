@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../auth/login_screen.dart';
-import '../auth/signup_screen.dart';
+import 'create_profile_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -50,7 +49,7 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Encontre seus amigos facilemente\nmesmo sem internet',
+                      'Encontre seus amigos facilmente\nmesmo sem internet',
                       style: GoogleFonts.comfortaa(
                         fontSize: 20,
                         fontWeight: FontWeight.w300,
@@ -65,7 +64,7 @@ class WelcomeScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Botões
+            // Botão único e aviso
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 29),
               child: Column(
@@ -74,12 +73,12 @@ class WelcomeScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 51,
                     child: FilledButton(
-                      onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                          );
-                        },
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CriarPerfilScreen(),
+                        ),
+                      ),
                       style: FilledButton.styleFrom(
                         backgroundColor: _blue,
                         shape: RoundedRectangleBorder(
@@ -87,41 +86,33 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        'Entrar',
+                        'Começar',
                         style: GoogleFonts.comfortaa(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 11),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 51,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SignupScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.person_add_alt_1, color: _blue),
-                      label: Text(
-                        'Criar Conta',
-                        style: GoogleFonts.comfortaa(
-                          fontSize: 16,
-                          color: _blue,
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_outline,
+                          size: 15, color: Color(0xFF9E9E9E)),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Sem cadastro, sem e-mail e sem senha',
+                          style: GoogleFonts.comfortaa(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w300,
+                            color: const Color(0xFF9E9E9E),
+                          ),
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: _blue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
